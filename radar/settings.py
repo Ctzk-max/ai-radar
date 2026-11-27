@@ -25,7 +25,6 @@ PUBLIC_HOST = urlsplit(PUBLIC_URL).hostname
 ORIGIN_HOST = os.environ.get("RADAR_ORIGIN_HOST", "").strip().lower()
 ALLOWED_HOSTS = [host for host in (PUBLIC_HOST, ORIGIN_HOST) if host] if PRODUCTION else ["127.0.0.1", "localhost", "testserver"]
 CSRF_TRUSTED_ORIGINS = [PUBLIC_URL] if PRODUCTION else []
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if PRODUCTION else None
 SECURE_SSL_REDIRECT = PRODUCTION
 SECURE_SSL_HOST = PUBLIC_HOST if PRODUCTION else None
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]

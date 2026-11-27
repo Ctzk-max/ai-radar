@@ -75,16 +75,11 @@ def main():
         worker = threading.Thread(target=scheduler, args=(stop,), name="radar-scheduler", daemon=True)
         worker.start()
     try:
-        proxy = {
-            "trusted_proxy": "*", "trusted_proxy_count": 1,
-            "trusted_proxy_headers": {"x-forwarded-proto", "x-forwarded-host"},
-        } if settings.PRODUCTION else {}
         serve(
             application, host="0.0.0.0" if settings.PRODUCTION else "127.0.0.1",
             port=int(os.getenv("PORT", "8018")), threads=6, channel_timeout=25,
             max_request_body_size=22 * 1024 * 1024, max_request_header_size=32 * 1024,
             clear_untrusted_proxy_headers=True,
-            **proxy,
         )
     finally:
         stop.set()
