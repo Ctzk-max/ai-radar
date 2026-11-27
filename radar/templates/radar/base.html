@@ -1,0 +1,46 @@
+{% load static %}
+<!doctype html>
+<html lang="zh-Hans" data-theme="{{ theme|default:'system' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11182d">
+  <title>{% if title %}{{ title }} · {% endif %}AI Radar</title>
+  <link rel="icon" href="{% static 'radar/icon-192.png' %}">
+  <link rel="manifest" href="{% url 'manifest' %}">
+  <link rel="stylesheet" href="{% static 'radar/main.css' %}">
+  <script src="{% static 'radar/app.js' %}" defer></script>
+</head>
+<body class="{% if not signed_in %}anonymous{% endif %}">
+  {% if signed_in %}
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="{% url 'feed' %}"><img class="brand-icon" src="{% static 'radar/icon-192.png' %}" alt=""><span>AI Radar <small>私人情报站</small></span></a>
+      <nav aria-label="主导航">
+        <div class="nav-label">情报</div>
+        <a href="{% url 'feed' %}" {% if active == 'all' %}aria-current="page"{% endif %}><span aria-hidden="true">◈</span>全部精选</a>
+        <a href="{% url 'feed' %}?section=offer" {% if active == 'offer' %}aria-current="page"{% endif %}><span aria-hidden="true">✦</span>AI 羊毛</a>
+        <a href="{% url 'feed' %}?section=model" {% if active == 'model' %}aria-current="page"{% endif %}><span aria-hidden="true">◉</span>模型动态</a>
+        <a href="{% url 'models' %}" {% if active == 'models' %}aria-current="page"{% endif %}><span aria-hidden="true">▥</span>模型能力</a>
+        <a href="{% url 'feed' %}?section=cloud" {% if active == 'cloud' %}aria-current="page"{% endif %}><span aria-hidden="true">☁</span>免费云服务器</a>
+        <div class="nav-label">个人</div>
+        <a href="{% url 'feed' %}?section=saved" {% if active == 'saved' %}aria-current="page"{% endif %}><span aria-hidden="true">★</span>我的收藏</a>
+        <a href="{% url 'feed' %}?section=claims" {% if active == 'claims' %}aria-current="page"{% endif %}><span aria-hidden="true">✓</span>领取记录</a>
+        <a href="{% url 'feed' %}?section=history" {% if active == 'history' %}aria-current="page"{% endif %}><span aria-hidden="true">◷</span>历史记录</a>
+        <div class="nav-label">管理</div>
+        <a href="{% url 'sources' %}" {% if active == 'sources' %}aria-current="page"{% endif %}><span aria-hidden="true">⊕</span>来源管理</a>
+        <a href="{% url 'status' %}" {% if active == 'status' %}aria-current="page"{% endif %}><span aria-hidden="true">⌁</span>采集状态</a>
+        <a href="{% url 'settings' %}" {% if active == 'settings' %}aria-current="page"{% endif %}><span aria-hidden="true">⚙</span>设置</a>
+      </nav>
+      <form action="{% url 'logout' %}" method="post" class="signout">{% csrf_token %}<button type="submit">退出登录</button></form>
+    </aside>
+    <main class="content">
+  {% else %}
+    <main class="signedout">
+  {% endif %}
+      {% for message in messages %}<p role="status" class="notice {{ message.tags }}">{{ message }}</p>{% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  {% if signed_in %}</div>{% endif %}
+</body>
+</html>

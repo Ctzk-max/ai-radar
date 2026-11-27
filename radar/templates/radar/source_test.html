@@ -1,0 +1,14 @@
+{% extends 'radar/base.html' %}
+{% block content %}
+<header class="page-head"><div><h1>测试抓取</h1><p>测试结果仅作预览。</p></div><a class="button" href="{% url 'sources' %}">返回来源</a></header>
+<div class="two-col">
+  <section class="panel pane">
+    {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+    {% if result %}
+      <h2>识别为 {{ result.kind }}</h2><p class="break">{{ result.url }}</p><p>解析 {{ result.items|length }} 条</p>
+      <ul class="link-list">{% for item in result.items|slice:":10" %}<li><a href="{{ item.url }}" rel="noopener noreferrer" target="_blank">{{ item.title }}</a><span>{{ item.published|date:"m-d H:i"|default:"日期未知" }}</span></li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+  <section class="panel pane"><form class="field-stack" action="{% url 'source-test' %}" method="post">{% csrf_token %}{{ form.as_div }}<button type="submit" class="button primary">重新测试</button></form></section>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends 'radar/base.html' %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <div class="eyebrow">AI 情报</div>
+    <h1>{{ title }}</h1>
+    <p>{{ subtitle }}</p>
+  </div>
+  {% if heartbeat %}<a class="heartbeat" href="{% url 'status' %}">采集心跳 {{ heartbeat|date:"m-d H:i" }}</a>{% endif %}
+</header>
+{% if active == 'all' %}
+<section class="stats" aria-label="情报统计">
+  {% for key,label,total in stats %}
+    <a class="stat {{ key }}" href="{% url 'feed' %}?section={{ key }}"><span>{{ label }}</span><strong>{{ total }}</strong><small>{% if key == 'saved' %}累计{% else %}{{ counts_range }}{% endif %}</small></a>
+  {% endfor %}
+</section>
+{% endif %}
+<form class="panel filterbar" method="get">
+  <input type="hidden" name="section" value="{{ filters.section }}">
+  <div class="field search"><label for="search">搜索</label><input id="search" name="q" value="{{ filters.q }}" placeholder="标题、内容、平台或来源" maxlength="120" type="search"></div>
+  <div class="field"><label for="days">时间</label><select id="days" name="days">
+    <option value="3" {% if filters.days == 3 %}selected{% endif %}>最近 3 天</option>
+    <option value="7" {% if filters.days == 7 %}selected{% endif %}>最近 7 天</option>
+    <option value="30" {% if filters.days == 30 %}selected{% endif %}>最近 30 天</option>
+    <option value="0" {% if filters.days == 0 %}selected{% endif %}>全部时间</option>
+  </select></div>
+  <div class="field"><label for="order">排序</label><select id="order" name="order">
+    <option value="priority" {% if filters.order == 'priority' %}selected{% endif %}>重要程度</option>
+    <option value="new" {% if filters.order == 'new' %}selected{% endif %}>最新发布</option>
+    <option value="deadline" {% if filters.order == 'deadline' %}selected{% endif %}>截止时间</option>
+  </select></div>
+  <div class="field"><label for="platform">平台</label><select id="platform" name="platform">
+    <option value="">全部平台</option>
+    {% for platform in platforms %}<option {% if filters.platform == platform %}selected{% endif %}>{{ platform }}</option>{% endfor %}
+  </select></div>
+  <div class="field"><label for="trust">来源</label><select id="trust" name="trust">
+    <option value="">全部来源</option>
+    <option value="official" {% if filters.trust == 'official' %}selected{% endif %}>平台官方</option>
+    <option value="independent" {% if filters.trust == 'independent' %}selected{% endif %}>独立测试</option>
+    <option value="community" {% if filters.trust == 'community' %}selected{% endif %}>社区线索</option>
+  </select></div>
+  <div class="field"><label for="read">阅读状态</label><select id="read" name="read">
+    <option value="">全部</option>
+    <option value="unread" {% if filters.read == 'unread' %}selected{% endif %}>未读</option>
+    <option value="read" {% if filters.read == 'read' %}selected{% endif %}>已读</option>
+  </select></div>
+  <button class="button primary" type="submit">筛选</button>
+</form>
+<div class="results-head">
+  <h2>情报列表 <span>{{ count }} 条</span></h2>
+  {% if active == 'all' %}<nav aria-label="更多分类"><a href="?section=evaluation">评测动态</a><a href="?section=tool">开发工具</a></nav>{% endif %}
+</div>
+<section class="cards" aria-label="情报列表">
+  {% for event in results %}
+    <article class="panel event-card{% if event.read %} read{% endif %}">
+      <div class="event-meta">
+        <span class="tag category {{ event.category }}">{{ event.get_category_display }}</span>
+        <span class="tag {{ event.tone }}">{{ event.badge }}</span>
+        {% if event.pinned %}<span class="tag info">置顶</span>{% endif %}
+        {% if event.hidden %}<span class="tag muted">已隐藏</span>{% endif %}
+        {% if event.platform %}<span>{{ event.platform }}</span>{% endif %}
+        {% if event.claim != 'open' %}<span class="tag muted">{{ event.get_claim_display }}</span>{% endif %}
+      </div>
+      <h3><a href="{% url 'event' event.pk %}">{{ event.title }}</a></h3>
+      {% if event.summary %}<p class="summary">{{ event.summary|truncatechars:245 }}</p>{% endif %}
+      <div class="event-foot">
+        <div class="event-dates">
+          {% with ref=event.references.all.0 %}{% if ref %}<span>{{ ref.source_name }}{% if event.references.all|length > 1 %} +{{ event.references.all|length|add:"-1" }}{% endif %}</span>{% endif %}{% endwith %}
+          <span>发布 {{ event.published_at|date:"m-d H:i"|default:"未知" }}</span>
+          <span>发现 {{ event.discovered_at|date:"m-d H:i" }}</span>
+        </div>
+        <a href="{{ event.canonical_url }}" target="_blank" rel="noopener noreferrer">原文</a>
+      </div>
+      {% include 'radar/event_actions.html' %}
+    </article>
+  {% empty %}
+    <div class="panel empty"><span class="empty-mark" aria-hidden="true">◈</span><h3>没有匹配的情报</h3><p>可扩大时间范围或清除筛选条件。</p><a class="button" href="?section={{ filters.section }}&days=0">查看全部时间</a></div>
+  {% endfor %}
+</section>
+{% if results.has_other_pages %}
+<nav class="pagination" aria-label="列表分页">
+  {% if results.has_previous %}<a class="button" href="?{{ query }}&page={{ results.previous_page_number }}">上一页</a>{% endif %}
+  <span>{{ results.number }} / {{ results.paginator.num_pages }}</span>
+  {% if results.has_next %}<a class="button" href="?{{ query }}&page={{ results.next_page_number }}">下一页</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

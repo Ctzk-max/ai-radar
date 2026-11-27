@@ -1,0 +1,10 @@
+{% extends 'radar/base.html' %}
+{% block content %}
+<header class="page-head"><div><h1>{{ title }}</h1>{% if hint %}<p>{{ hint }}</p>{% endif %}</div><a class="button" href="{% url back_name %}">返回</a></header>
+<section class="panel pane narrow">
+  <form method="post" class="field-stack">{% csrf_token %}{{ form.as_div }}<button class="button primary" type="submit">保存</button></form>
+  {% if delete %}
+  <details class="compact"><summary>删除这项指标</summary><form method="post" class="standalone">{% csrf_token %}<button class="button danger" type="submit" name="action" value="delete">确认删除</button></form></details>
+  {% endif %}
+</section>
+{% endblock %}

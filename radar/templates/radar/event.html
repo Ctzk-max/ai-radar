@@ -1,0 +1,50 @@
+{% extends 'radar/base.html' %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a href="{% url 'feed' %}?section={{ event.category }}">返回{{ event.get_category_display }}</a>
+    <h1>{{ event.title }}</h1>
+    <div class="event-meta"><span class="tag category {{ event.category }}">{{ event.get_category_display }}</span><span class="tag {{ event.tone }}">{{ event.badge }}</span>{{ event.platform }}</div>
+  </div>
+</header>
+<div class="two-col">
+  <div>
+    <article class="panel pane">
+      <h2>原文摘要</h2>
+      <p class="longcopy">{{ event.summary|default:"暂无摘要，请查看原文。" }}</p>
+      <div class="event-dates"><span>发布 {{ event.published_at|date:"Y-m-d H:i"|default:"未知" }}</span><span>发现 {{ event.discovered_at|date:"Y-m-d H:i" }}</span></div>
+      {% include 'radar/event_actions.html' %}
+    </article>
+    {% if event.category == 'offer' or event.category == 'cloud' %}
+    <section class="panel pane">
+      <h2>福利条款</h2>
+      <dl class="values">
+        <dt>核验状态</dt><dd>{% if event.first_party %}记录来自平台官方资料{% else %}尚未核实{% endif %}</dd>
+        <dt>最近核验</dt><dd>{{ event.checked_at|date:"Y-m-d H:i"|default:"未知" }}</dd>
+        <dt>开始时间</dt><dd>{{ event.starts_at|date:"Y-m-d H:i T"|default:"未知，见原文" }}</dd>
+        <dt>截止时间</dt><dd>{{ event.deadline|date:"Y-m-d H:i T"|default:"未知，见原文" }}</dd>
+        {% for label,value in event.details %}<dt>{{ label }}</dt><dd>{{ value|default:"暂无可提取信息" }}</dd>{% endfor %}
+      </dl>
+    </section>
+    {% endif %}
+  </div>
+  <div>
+    <section class="panel pane">
+      <h2>来源与原文</h2>
+      <ul class="link-list">
+        {% for ref in event.references.all %}<li><a href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.source_name }}</a><span>{{ ref.get_trust_display }}</span></li>{% endfor %}
+      </ul>
+      {% if event.evidence.official_url %}<a class="button primary" href="{{ event.evidence.official_url }}" target="_blank" rel="noopener noreferrer">打开官方页面</a>{% else %}<a class="button" href="{{ event.canonical_url }}" target="_blank" rel="noopener noreferrer">打开原文</a>{% endif %}
+    </section>
+    {% if event.category == 'offer' or event.category == 'cloud' %}
+    <section class="panel pane">
+      <h2>领取记录</h2>
+      <form class="field-stack" method="post" action="{% url 'event-update' event.id %}">{% csrf_token %}{{ claim_form.as_div }}
+        {% if event.claimed_at %}<p>领取时间 {{ event.claimed_at|date:"Y-m-d H:i" }}</p>{% endif %}
+        <button name="action" value="claim" class="button primary" type="submit">保存记录</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

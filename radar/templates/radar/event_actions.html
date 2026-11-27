@@ -1,0 +1,12 @@
+<form class="event-actions" action="{% url 'event-update' event.id %}" method="post">
+  {% csrf_token %}
+  {% if filters %}
+    <input type="hidden" name="return_section" value="{{ filters.section }}">
+    {% for key,value in filters.items %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    <input type="hidden" name="page" value="{{ results.number }}">
+  {% endif %}
+  <button name="action" value="bookmarked" type="submit" aria-pressed="{{ event.bookmarked|yesno:'true,false' }}">{% if event.bookmarked %}★ 已收藏{% else %}☆ 收藏{% endif %}</button>
+  <button name="action" value="read" type="submit" aria-pressed="{{ event.read|yesno:'true,false' }}">{% if event.read %}标为未读{% else %}标为已读{% endif %}</button>
+  <button name="action" value="pinned" type="submit" aria-pressed="{{ event.pinned|yesno:'true,false' }}">{% if event.pinned %}取消置顶{% else %}置顶{% endif %}</button>
+  <button name="action" value="hidden" type="submit">{% if event.hidden %}恢复显示{% else %}不感兴趣{% endif %}</button>
+</form>

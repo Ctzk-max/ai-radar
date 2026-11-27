@@ -1,0 +1,34 @@
+{% extends 'radar/base.html' %}
+{% block content %}
+<header class="page-head"><div><h1>模型能力对比</h1><p>按能力维度查看模型记录、测试设置和出处。</p></div><a href="{% url 'observation' %}" class="button primary">添加指标</a></header>
+<form method="get" class="panel pane compare-form">
+  <div class="field"><label for="metric">能力维度</label><select id="metric" name="metric">{% for value,label in dimensions %}<option value="{{ value }}" {% if focus == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  {% if options %}
+  <fieldset>
+    <legend>模型 · 可比较 4 个</legend>
+    <details class="compact model-picker"><summary>选取模型（{{ observation_count }} 个可选）</summary>
+      <div class="model-options">{% for model in options %}<label><input type="checkbox" name="model" value="{{ model }}" {% if model in selected %}checked{% endif %}>{{ model }}</label>{% endfor %}</div>
+    </details>
+  </fieldset>
+  {% endif %}
+  <button class="button primary" type="submit">更新对比</button>
+</form>
+<div class="compare-grid">
+  {% for model, rows in comparisons %}
+    <section class="panel pane compare-card">
+      <h2>{{ model }}</h2>
+      {% for item in rows %}
+        <div class="metric-item">
+          <span class="tag {% if item.trust == 'independent' %}info{% elif item.trust == 'official' %}success{% else %}muted{% endif %}">{{ item.get_trust_display }}</span>
+          <h3>{{ item.metric }}</h3><p class="metric-value">{{ item.value }} <small>{{ item.unit }}</small></p>
+          <p>{{ item.method }}</p>
+          <p><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">数据来源</a> · {{ item.observed_on|date:"Y-m-d" }} · <a href="{% url 'observation-edit' item.pk %}">编辑</a></p>
+        </div>
+      {% empty %}<p>暂无数据</p>{% endfor %}
+    </section>
+  {% empty %}
+    <div class="panel empty"><h2>暂无数据</h2><p>可切换能力维度，或添加带有来源的记录。</p></div>
+  {% endfor %}
+</div>
+<p class="resource-links">评测资料 <a href="https://www.swebench.com/verified.html" target="_blank" rel="noopener noreferrer">SWE-bench 方法</a><a href="https://artificialanalysis.ai/methodology/" target="_blank" rel="noopener noreferrer">Artificial Analysis 方法</a></p>
+{% endblock %}

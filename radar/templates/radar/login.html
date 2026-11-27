@@ -1,0 +1,16 @@
+{% extends 'radar/base.html' %}
+{% load static %}
+{% block content %}
+<section class="login-card">
+  <img class="brand-icon" src="{% static 'radar/icon-192.png' %}" alt="">
+  <h1>AI Radar</h1>
+  <p>登录私人 AI 情报站</p>
+  {% if error %}<p role="alert" class="notice error">{{ error }}</p>{% endif %}
+  <form method="post" class="field-stack">
+    {% csrf_token %}
+    <label for="login-password">管理员密码</label>
+    <input id="login-password" type="password" name="password" maxlength="256" autocomplete="current-password" required autofocus>
+    <button class="button primary" type="submit">登录</button>
+  </form>
+</section>
+{% endblock %}
