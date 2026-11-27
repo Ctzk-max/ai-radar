@@ -21,10 +21,13 @@ if PRODUCTION:
 else:
     SECRET_KEY = SECRET_KEY or "local-ai-radar-development-only-unsafe-for-internet"
 
-ALLOWED_HOSTS = [urlsplit(PUBLIC_URL).hostname] if PRODUCTION else ["127.0.0.1", "localhost", "testserver"]
+PUBLIC_HOST = urlsplit(PUBLIC_URL).hostname
+ORIGIN_HOST = os.environ.get("RADAR_ORIGIN_HOST", "").strip().lower()
+ALLOWED_HOSTS = [host for host in (PUBLIC_HOST, ORIGIN_HOST) if host] if PRODUCTION else ["127.0.0.1", "localhost", "testserver"]
 CSRF_TRUSTED_ORIGINS = [PUBLIC_URL] if PRODUCTION else []
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if PRODUCTION else None
 SECURE_SSL_REDIRECT = PRODUCTION
+SECURE_SSL_HOST = PUBLIC_HOST if PRODUCTION else None
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 SECURE_HSTS_SECONDS = 31536000 if PRODUCTION else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = PRODUCTION
@@ -44,10 +47,10 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 100
 
 MIDDLEWARE = [
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "radar.security.private_headers",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
