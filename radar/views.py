@@ -23,7 +23,7 @@ from .adapters import collect_source
 from .backup import export_backup, preferences_row, read_json, restore_backup, source_configuration
 from .forms import ClaimForm, ObservationForm, PreferenceForm, SOURCE_FIELDS, SourceForm, TestSourceForm
 from .intelligence import DETAILS, terms
-from .models import Category, Event, EventReference, FetchRun, LoginWindow, Observation, Runtime, Source
+from .models import Category, Discovery, Event, EventReference, FetchRun, LoginWindow, Observation, Runtime, Source
 from .network import FetchError
 from .security import auth_version, authenticated, private, verify_password
 
@@ -313,6 +313,8 @@ def sources(request):
     return page(request, "radar/sources.html", {
         "title": "来源管理", "active": "sources", "sources": Paginator(sources, 40).get_page(request.GET.get("page")), "q": q,
         "test_form": TestSourceForm(),
+        "discoveries": Discovery.objects.filter(status="ready").exclude(url__in=Source.objects.values("url")).order_by("-checked_at")[:12],
+        "discovery_attempts": Discovery.objects.exclude(checked_at=None).count(),
     })
 
 
@@ -320,7 +322,11 @@ def sources(request):
 @require_http_methods(["GET", "POST"])
 def source_edit(request, source_id=None):
     source = get_object_or_404(Source, pk=source_id) if source_id else None
-    form = SourceForm(request.POST or None, instance=source)
+    proposal = None
+    if not source and request.method == "GET":
+        proposal = Discovery.objects.filter(pk=number(request.GET.get("discovery"), 0, 0, 2 ** 31 - 1), status="ready").first()
+    initial = {"url": proposal.url, "kind": proposal.detected_kind} if proposal else None
+    form = SourceForm(request.POST or None, instance=source, initial=initial)
     if request.method == "POST" and form.is_valid():
         if source_id:
             with transaction.atomic():
@@ -440,12 +446,17 @@ def status_data():
     recent = FetchRun.objects.order_by("-at").first()
     beats = dict(Runtime.objects.filter(pk__in=["heartbeat", "benchmark_try", "benchmark_ok"]).values_list("pk", "at"))
     active = beats.get("heartbeat")
+    day = timezone.now() - timedelta(hours=24)
+    recent_runs = FetchRun.objects.filter(at__gte=day)
     return {
         "total": sources.count(), "healthy": live.filter(streak=0, last_success__isnull=False).count(),
         "failed": live.filter(streak__gt=0).count(), "paused": sources.filter(enabled=False).count(),
         "last_run": recent.at if recent else None, "last_success": live.exclude(last_success=None).order_by("-last_success").values_list("last_success", flat=True).first(),
         "heartbeat": active, "worker_ok": bool(active and active > timezone.now() - timedelta(minutes=4)),
         "benchmark_last_success": beats.get("benchmark_ok"), "benchmark_last_attempt": beats.get("benchmark_try"),
+        "first_recorded_run": FetchRun.objects.order_by("at").values_list("at", flat=True).first(),
+        "runs_last_24h": recent_runs.count(), "successes_last_24h": recent_runs.filter(status="ok").count(),
+        "heartbeat_hours_last_24h": Runtime.objects.filter(pk__startswith="hour:", at__gte=day).count(),
     }
 
 

@@ -135,6 +135,18 @@ class Runtime(models.Model):
     at = models.DateTimeField(default=timezone.now)
 
 
+class Discovery(models.Model):
+    url = models.URLField(max_length=1200, unique=True)
+    found_from = models.CharField(max_length=110)
+    found_at = models.DateTimeField(default=timezone.now, db_index=True)
+    status = models.CharField(max_length=12, default="pending", db_index=True)
+    checked_at = models.DateTimeField(null=True, blank=True)
+    detected_kind = models.CharField(max_length=12, blank=True)
+    items = models.PositiveSmallIntegerField(default=0)
+    sample_titles = models.JSONField(default=list, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+
+
 class LoginWindow(models.Model):
     key = models.CharField(max_length=64, primary_key=True)
     at = models.DateTimeField(default=timezone.now, db_index=True)

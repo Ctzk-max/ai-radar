@@ -17,6 +17,17 @@
     </form>
   </details>
 </div>
+{% if discoveries or discovery_attempts %}
+<details class="panel compact">
+  <summary>自动发现的来源（已检查 {{ discovery_attempts }} 个）</summary>
+  <ul class="link-list">
+    {% for candidate in discoveries %}<li>
+      <a href="{% url 'source-new' %}?discovery={{ candidate.pk }}">添加 {{ candidate.url }}</a>
+      <span>来自 {{ candidate.found_from }} · {{ candidate.items }} 条近期相关记录</span>
+    </li>{% empty %}<li>暂时没有通过检查的新来源。</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
 <section class="panel source-list" aria-label="来源列表">
   {% for source in sources %}
   <article class="source-item">

@@ -12,9 +12,11 @@ from django.utils import timezone
 from .adapters import collect_source
 from .backup import sqlite_daily_backup
 from .benchmarks import update_benchmarks
+from .discovery import assess_candidates, enqueue_candidates
 from .intelligence import canonical, ingest
 from .models import Event, EventReference, FetchRun, LoginWindow, Runtime, Source
 from .network import FetchError
+from .specifications import refresh_specs
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +55,8 @@ def collect_one(source_id, manual=False):
         locked.last_count = 0
         if batch is not None:
             locked.last_count = ingest(locked, batch.items, now)
+            if locked.last_count:
+                enqueue_candidates(locked, batch.items, now)
             locked.detected_kind = batch.kind
             locked.fetch_url = batch.url
             if batch.fingerprints:
@@ -95,6 +99,7 @@ def run_thread(source_id):
 def run_due(limit=20, workers=4):
     now = timezone.now()
     Runtime.objects.update_or_create(pk="heartbeat", defaults={"at": now})
+    Runtime.objects.update_or_create(pk=now.strftime("hour:%Y%m%d%H"), defaults={"at": now})
     source_ids = list(Source.objects.filter(enabled=True, next_check__lte=now)
                       .filter(Q(lease_until__isnull=True) | Q(lease_until__lt=now))
                       .order_by("next_check", "-weight").values_list("pk", flat=True)[:limit])
@@ -123,6 +128,7 @@ def maintenance():
         FetchRun.objects.filter(at__lt=now - timedelta(days=45)).delete()
         LoginWindow.objects.filter(at__lt=now - timedelta(days=1)).delete()
         Session.objects.filter(expire_date__lt=now).delete()
+        Runtime.objects.filter(pk__startswith="hour:", at__lt=now - timedelta(days=45)).delete()
         Runtime.objects.update_or_create(pk="maintenance", defaults={"at": now})
 
 
@@ -135,6 +141,9 @@ def scheduler(stop_event, poll_seconds=45):
                 update_benchmarks()
             except FetchError as exc:
                 log.warning("benchmark refresh failed: %s", exc)
+            refresh_specs()
+            if not Source.objects.filter(enabled=True, last_checked__isnull=True).exists():
+                assess_candidates()
             maintenance()
         except Exception as exc:
             log.error("scheduler tick failed (%s)", type(exc).__name__)

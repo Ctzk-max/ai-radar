@@ -15,6 +15,8 @@
     <dt>调度心跳</dt><dd>{{ metrics.heartbeat|date:"Y-m-d H:i:s"|default:"暂无" }}</dd>
     <dt>评测最近检查</dt><dd>{{ metrics.benchmark_last_attempt|date:"Y-m-d H:i:s"|default:"暂无" }}</dd>
     <dt>评测最近成功</dt><dd>{{ metrics.benchmark_last_success|date:"Y-m-d H:i:s"|default:"暂无" }}</dd>
+    <dt>最早保留的采集</dt><dd>{{ metrics.first_recorded_run|date:"Y-m-d H:i:s"|default:"暂无" }}</dd>
+    <dt>最近 24 小时</dt><dd>{{ metrics.runs_last_24h }} 次采集，{{ metrics.successes_last_24h }} 次成功，{{ metrics.heartbeat_hours_last_24h }} 个小时有心跳</dd>
   </dl>
 </section>
 <section class="panel pane">

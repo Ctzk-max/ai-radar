@@ -11,10 +11,13 @@ from .adapters import Batch, Item, collect_source, parse_feed
 from .backup import export_backup, restore_backup
 from .benchmarks import extract_swe
 from .collector import claim_source, collect_one
+from .discovery import assess_candidates, enqueue_candidates
+from .ingress import protect_ingress
 from .intelligence import canonical, ingest
-from .models import Category, Event, EventReference, FetchRun, Observation, Preferences, Source
+from .models import Category, Discovery, Event, EventReference, FetchRun, Observation, Preferences, Source
 from .network import FetchError, Response, public_url, resolve_public
 from .security import auth_version
+from .specifications import claude_rows, deepseek_rows
 
 
 class NetworkTests(SimpleTestCase):
@@ -69,6 +72,40 @@ class NetworkTests(SimpleTestCase):
         self.assertEqual((rows[0][1], rows[0][4]), ("72.8", date(2026, 2, 17)))
         self.assertIn("2.1.0", rows[0][2])
 
+    @override_settings(ORIGIN_HOST="altare-origin.example.org", PUBLIC_HOST="radar.example.org",
+                       PUBLIC_URL="https://radar.example.org")
+    def test_ingress_requires_network_and_marks_only_edge_as_https(self):
+        def app(values, reply):
+            self.assertEqual(values["HTTP_HOST"], "radar.example.org")
+            self.assertEqual(values["wsgi.url_scheme"], "https")
+            reply("200 OK", [])
+            return [b"ok"]
+        wrapped = protect_ingress(app)
+        values = {"HTTP_HOST": "altare-origin.example.org:1234", "PATH_INFO": "/login/",
+                  "wsgi.url_scheme": "http", "HTTP_CF_RAY": "test", "HTTP_X_FORWARDED_PROTO": "https"}
+        for addr, method, code in [("1.1.1.1", "POST", "403"), ("1.1.1.1", "GET", "308"), ("173.245.50.0", "GET", "200")]:
+            statuses = []
+            wrapped({**values, "REMOTE_ADDR": addr, "REQUEST_METHOD": method}, lambda status, headers: statuses.append(status))
+            self.assertTrue(statuses[0].startswith(code))
+
+    def test_model_specs_keep_units_and_billing_conditions(self):
+        body = b"""<main><table><tr><th>MODEL VERSION</th><td>DeepSeek-V4.1-Flash</td><td>DeepSeek-V4-Pro</td></tr>
+        <tr><th>CONTEXT LENGTH</th><td colspan="2">1M</td></tr>
+        <tr><th>1M OUTPUT TOKENS</th><th>OFF-PEAK</th><td>$0.6</td><td>$1.98</td></tr>
+        <tr><th>PEAK</th><td>$1.2</td><td>$3.96</td></tr></table></main>"""
+        rows = deepseek_rows(body)
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(rows[0][1:5], ("context", "API 上下文窗口", "1M", ""))
+        self.assertEqual(rows[-1][1:5], ("cost", "输出 · 高峰", "3.96", "USD / 百万 tokens"))
+        md = b"""## Latest models
+| Feature | Claude Example 1.2 |
+| [Context window](/docs) | 1M tokens |
+| Max output | 128K tokens |
+| [Pricing](/docs) | From $1 / input MTok, $2 / output MTok |
+## Other
+"""
+        self.assertEqual([r[1] for r in claude_rows(md)], ["context", "limits", "cost"])
+
 
 class CollectionTests(TestCase):
     def setUp(self):
@@ -76,8 +113,25 @@ class CollectionTests(TestCase):
                                             trust="official", platform="OpenAI", category=Category.OFFER)
 
     def item(self):
+        cutoff = (timezone.now().replace(microsecond=0) + timedelta(days=9)).isoformat()
         return Item("ChatGPT introduces a free student plan", "https://openai.com/students?utm_medium=rss",
-                    "A free tier and student plan. Apply at the official page. Valid until 2027-11-01T10:00:00Z.")
+                    f"A free tier and student plan. Apply at the official page. Valid until {cutoff}.")
+
+    def test_discovery_requires_recent_relevant_feed_items_and_review(self):
+        now = timezone.now()
+        sample = self.item()
+        sample.published = now
+        sample.links = ("https://new-source.example.org/path", "https://x.com/example", "https://127.0.0.1/rss")
+        self.source.weight = 72
+        enqueue_candidates(self.source, [sample], now)
+        candidate = Discovery.objects.get()
+        self.assertEqual(candidate.url, "https://new-source.example.org/")
+        items = [sample, Item("Gemini offers free tier", "https://new-source.example.org/gemini", "New API free tier", now)]
+        with patch("radar.discovery.collect_source", return_value=Batch("rss", candidate.url, items)):
+            self.assertEqual(assess_candidates(), 1)
+        candidate.refresh_from_db()
+        self.assertEqual((candidate.status, candidate.items), ("ready", 2))
+        self.assertFalse(Source.objects.filter(url=candidate.url).exists())
 
     def test_ingestion_merges_url_deduplicates_and_retains_provenance(self):
         self.assertEqual(ingest(self.source, [self.item()]), 1)
