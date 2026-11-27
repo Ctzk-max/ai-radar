@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import threading
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "radar.settings")
@@ -17,19 +18,47 @@ from radar.collector import scheduler
 from radar.security import password_hash
 
 
+def startup_failure(exc):
+    cause = exc.__cause__ or exc
+    code = getattr(cause, "sqlstate", "") or ""
+    if not re.fullmatch(r"[0-9A-Z]{5}", code):
+        code = "none"
+    detail = str(cause).casefold()
+    signals = [
+        ("authentication", ("password authentication failed", "no password supplied", "pg_hba.conf")),
+        ("database-missing", ("database", "does not exist")),
+        ("dns", ("could not translate host name", "name or service not known", "temporary failure in name resolution", "failed to resolve host")),
+        ("timeout", ("timeout expired", "timed out")),
+        ("network", ("connection refused", "network is unreachable", "no route to host")),
+        ("tls", ("ssl", "tls", "certificate")),
+        ("permissions", ("permission denied", "must be owner", "no schema has been selected")),
+        ("connection-closed", ("server closed the connection", "connection reset", "eof detected")),
+    ]
+    for reason, markers in signals:
+        if (all if reason == "database-missing" else any)(marker in detail for marker in markers):
+            return code, reason
+    return code, "unknown"
+
+
 def main():
     logger = logging.getLogger("radar")
+    stage = "connect"
     try:
         if settings.PRODUCTION:
             with connection.cursor() as cursor:
                 cursor.execute("CREATE SCHEMA IF NOT EXISTS radar")
+        stage = "authentication"
         password_hash(settings.ADMIN_PASSWORD_HASH, settings.LEGACY_PASSWORD)
+        stage = "migrations"
         call_command("migrate", interactive=False, verbosity=0)
+        stage = "catalog"
         call_command("seed_sources", verbosity=0)
+        stage = "static"
         call_command("collectstatic", interactive=False, verbosity=0)
         from radar.wsgi import application
     except Exception as exc:
-        logger.critical("startup failed (%s); check application environment and database access", type(exc).__name__)
+        code, reason = startup_failure(exc)
+        logger.critical("startup failed stage=%s type=%s sqlstate=%s reason=%s", stage, type(exc).__name__, code, reason)
         return 1
     stop = threading.Event()
     worker = None
