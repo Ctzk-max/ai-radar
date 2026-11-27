@@ -156,6 +156,7 @@ class WebTests(TestCase):
         response = client.get("/")
         self.assertIn("no-store", response["Cache-Control"])
         self.assertIn("script-src 'self'", response["Content-Security-Policy"])
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
         csrf = response.context["csrf_token"]
         self.assertEqual(client.post("/logout/", {"csrfmiddlewaretoken": csrf}).status_code, 302)
         self.assertEqual(client.get("/api/status/").status_code, 401)

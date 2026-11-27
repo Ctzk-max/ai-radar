@@ -1,5 +1,8 @@
 import json
+import sqlite3
+from pathlib import Path
 
+from django.conf import settings
 from django.core import serializers
 from django.core.management.color import no_style
 from django.db import connection, transaction
@@ -93,3 +96,30 @@ def read_json(file, limit=20 * 1024 * 1024):
     if len(data) > limit:
         raise ValueError("文件超出上传大小限制")
     return json.loads(data.decode("utf-8-sig"))
+
+
+def sqlite_daily_backup():
+    if not settings.PRODUCTION or connection.vendor != "sqlite" or not settings.SQLITE_PATH:
+        return
+    source = Path(settings.SQLITE_PATH)
+    directory = source.parent / "backups"
+    directory.mkdir(mode=0o700, exist_ok=True)
+    final = directory / f"radar-{timezone.localdate().isoformat()}.sqlite3"
+    if final.exists():
+        return
+    temporary = final.with_suffix(".tmp")
+    try:
+        reader = sqlite3.connect(f"{source.as_uri()}?mode=ro", uri=True, timeout=5)
+        writer = sqlite3.connect(temporary, timeout=5)
+        try:
+            reader.backup(writer)
+            if writer.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                raise ValueError("SQLite backup integrity check failed.")
+        finally:
+            writer.close()
+            reader.close()
+        temporary.replace(final)
+    finally:
+        temporary.unlink(missing_ok=True)
+    for old in sorted(directory.glob("radar-????-??-??.sqlite3"), reverse=True)[7:]:
+        old.unlink()

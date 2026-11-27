@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import threading
+from pathlib import Path
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "radar.settings")
 
@@ -44,9 +45,17 @@ def main():
     logger = logging.getLogger("radar")
     stage = "connect"
     try:
-        if settings.PRODUCTION:
+        if settings.PRODUCTION and connection.vendor == "postgresql":
             with connection.cursor() as cursor:
                 cursor.execute("CREATE SCHEMA IF NOT EXISTS radar")
+        elif settings.PRODUCTION and connection.vendor == "sqlite":
+            data = Path(settings.SQLITE_PATH)
+            data.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if not data.is_file() and not settings.SQLITE_INIT:
+                raise FileNotFoundError("Persistent database is missing; restore before starting.")
+            os.umask(0o077)
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA journal_mode=WAL")
         stage = "authentication"
         password_hash(settings.ADMIN_PASSWORD_HASH, settings.LEGACY_PASSWORD)
         stage = "migrations"

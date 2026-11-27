@@ -31,7 +31,7 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = PRODUCTION
 # Altare owns the managed public domain. Browser preload enrollment is separate.
 SILENCED_SYSTEM_CHECKS = ["security.W021"] if PRODUCTION else []
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_REFERRER_POLICY = "no-referrer"
+SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_SECURE = PRODUCTION
 SESSION_COOKIE_NAME = "__Host-radar" if PRODUCTION else "radar_dev"
@@ -77,7 +77,9 @@ USE_TZ = True
 TIME_ZONE = "Asia/Shanghai"
 LANGUAGE_CODE = "zh-hans"
 
-database_url = os.environ.get("RADAR_DATABASE_URL") or os.environ.get("DATABASE_URL")
+SQLITE_PATH = os.environ.get("RADAR_SQLITE_PATH")
+SQLITE_INIT = os.environ.get("RADAR_SQLITE_INIT") == "1"
+database_url = (os.environ.get("RADAR_DATABASE_URL") or os.environ.get("DATABASE_URL")) if not SQLITE_PATH else None
 if database_url:
     url = urlsplit(database_url)
     if url.scheme not in {"postgres", "postgresql"} or not url.hostname or not url.path.strip("/"):
@@ -101,12 +103,12 @@ if database_url:
         "PASSWORD": unquote(url.password or ""), "HOST": url.hostname, "PORT": url.port or 5432,
         "CONN_MAX_AGE": 60, "CONN_HEALTH_CHECKS": True, "OPTIONS": options,
     }}
-elif PRODUCTION:
-    raise ImproperlyConfigured("Configure the managed PostgreSQL connection before starting production.")
+elif PRODUCTION and (not SQLITE_PATH or not Path(SQLITE_PATH).is_absolute()):
+    raise ImproperlyConfigured("Configure PostgreSQL or an explicit absolute path on persistent storage.")
 else:
     DATABASES = {"default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.environ.get("RADAR_SQLITE_PATH", BASE_DIR / "radar.sqlite3"),
+        "NAME": SQLITE_PATH or BASE_DIR / "radar.sqlite3",
         "OPTIONS": {"timeout": 10, "transaction_mode": "IMMEDIATE"},
     }}
 

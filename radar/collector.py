@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .adapters import collect_source
+from .backup import sqlite_daily_backup
 from .benchmarks import update_benchmarks
 from .intelligence import canonical, ingest
 from .models import Event, EventReference, FetchRun, LoginWindow, Runtime, Source
@@ -117,6 +118,7 @@ def maintenance():
     last = Runtime.objects.filter(pk="maintenance").values_list("at", flat=True).first()
     if last and last > now - timedelta(hours=24):
         return
+    sqlite_daily_backup()
     with transaction.atomic():
         FetchRun.objects.filter(at__lt=now - timedelta(days=45)).delete()
         LoginWindow.objects.filter(at__lt=now - timedelta(days=1)).delete()

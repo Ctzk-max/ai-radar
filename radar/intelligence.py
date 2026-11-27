@@ -240,7 +240,8 @@ def ingest(source, items, now=None):
             evidence, begins, ends = offer_evidence(item, verified)
             event.evidence = evidence or event.evidence
             event.starts_at, event.deadline = begins, ends
-        event.save()
+        event.save(update_fields=["priority", "first_party", "checked_at", "canonical_url", "platform",
+                                  "summary", "evidence", "starts_at", "deadline"])
         association = digest if not reference else hashlib.sha256(f"{digest}:{source.pk}".encode()).hexdigest()
         EventReference.objects.get_or_create(digest=association, defaults={
             "event": event, "source": source, "source_name": source.name, "url": url,

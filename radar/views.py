@@ -141,7 +141,7 @@ def service_worker(request):
         "self.addEventListener('install', () => self.skipWaiting());\n"
         "self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));\n"
         "self.addEventListener('fetch', event => {\n"
-        "  if (event.request.mode === 'navigate') event.respondWith(fetch(event.request).catch(() =>\n"
+        "  if (event.request.mode === 'navigate' && event.request.method === 'GET') event.respondWith(fetch(event.request).catch(() =>\n"
         "    new Response('AI Radar offline', {status: 503, headers: {'Content-Type': 'text/plain', 'Cache-Control': 'no-store'}})));\n"
         "});\n",
         content_type="text/javascript",
