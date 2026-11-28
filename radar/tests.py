@@ -133,6 +133,22 @@ class CollectionTests(TestCase):
         self.assertEqual((candidate.status, candidate.items), ("ready", 2))
         self.assertFalse(Source.objects.filter(url=candidate.url).exists())
 
+    def test_existing_feed_items_can_trigger_the_first_discovery_scan(self):
+        sample = self.item()
+        sample.published = timezone.now()
+        sample.links = ("https://new-source.example.org/blog",)
+        self.source.weight = 72
+        self.source.etag = '"previous"'
+        self.source.save(update_fields=["weight", "etag"])
+        ingest(self.source, [sample])
+        def fetch(source):
+            self.assertEqual(source.etag, "")
+            return Batch("rss", source.url, [sample])
+        with patch("radar.collector.collect_source", side_effect=fetch):
+            run = collect_one(self.source.pk, manual=True)
+        self.assertEqual(run.added, 0)
+        self.assertTrue(Discovery.objects.filter(url="https://new-source.example.org/").exists())
+
     def test_ingestion_merges_url_deduplicates_and_retains_provenance(self):
         self.assertEqual(ingest(self.source, [self.item()]), 1)
         other = Source.objects.create(name="Community", url="https://example.org/feed", kind="rss")

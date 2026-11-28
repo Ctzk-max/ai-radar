@@ -12,7 +12,7 @@ from django.utils import timezone
 from .adapters import collect_source
 from .backup import sqlite_daily_backup
 from .benchmarks import update_benchmarks
-from .discovery import assess_candidates, enqueue_candidates
+from .discovery import assess_candidates, discovery_scan_due, enqueue_candidates
 from .intelligence import canonical, ingest
 from .models import Event, EventReference, FetchRun, LoginWindow, Runtime, Source
 from .network import FetchError
@@ -40,6 +40,8 @@ def collect_one(source_id, manual=False):
     started = time.monotonic()
     error, retry, batch, status = "", 0, None, "ok"
     try:
+        if discovery_scan_due(source, timezone.now()):
+            source.etag = source.last_modified = ""
         batch = collect_source(source)
     except FetchError as exc:
         error, status, retry = str(exc), exc.status, exc.retry_seconds
@@ -55,8 +57,7 @@ def collect_one(source_id, manual=False):
         locked.last_count = 0
         if batch is not None:
             locked.last_count = ingest(locked, batch.items, now)
-            if locked.last_count:
-                enqueue_candidates(locked, batch.items, now)
+            enqueue_candidates(locked, batch.items, now, new_items=bool(locked.last_count))
             locked.detected_kind = batch.kind
             locked.fetch_url = batch.url
             if batch.fingerprints:
@@ -129,6 +130,7 @@ def maintenance():
         LoginWindow.objects.filter(at__lt=now - timedelta(days=1)).delete()
         Session.objects.filter(expire_date__lt=now).delete()
         Runtime.objects.filter(pk__startswith="hour:", at__lt=now - timedelta(days=45)).delete()
+        Runtime.objects.filter(pk__startswith="discovery:", at__lt=now - timedelta(days=45)).delete()
         Runtime.objects.update_or_create(pk="maintenance", defaults={"at": now})
 
 

@@ -9,6 +9,7 @@
 - `RADAR_ORIGIN_HOST=se-sto07.tryaltare.ai` 是平台日志中的精确主机。跨节点迁移时复查主机及源地址。
 - 生产使用已有 `ADMIN_PASSWORD`。可用 `RADAR_ADMIN_PASSWORD_HASH` 优先指定 Django 哈希。独立签名密钥保存在 Altare 的 `RADAR_SECRET_KEY`。
 - 托管 PostgreSQL 已创建并注入 `DATABASE_URL` 和 `PG*`，目前主机名解析失败。数据库保留。恢复可用后优先配置厂商证书和 `verify-full`，在副本验证恢复并确认迁移后切换。
+- 2026-11-28 核实生产容器的命令任务可通过实际 uv 管理的 CPython 二进制运行。部署切换后全局链接可能指向构建暂存目录，应从 `/home/container/.altare-runtime/python/` 核对实际版本目录。生产验收任务已停用，运行历史保留。
 
 ## 备份、升级与回滚
 

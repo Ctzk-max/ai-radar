@@ -30,8 +30,21 @@ def discovery_url(link):
     return f"https://{target.hostname}/"
 
 
-def enqueue_candidates(source, items, now):
-    if source.weight < 60 or source.kind == Source.Kind.X or Discovery.objects.count() >= 240:
+def discovery_allowed(source):
+    return source.weight >= 60 and source.kind != Source.Kind.X and Discovery.objects.count() < 240
+
+
+def discovery_scan_due(source, now):
+    return discovery_allowed(source) and not Runtime.objects.filter(
+        pk=f"discovery:{source.pk}", at__gte=now - timedelta(hours=24),
+    ).exists()
+
+
+def enqueue_candidates(source, items, now, *, new_items=False):
+    if not (discovery_allowed(source) if new_items else discovery_scan_due(source, now)):
+        return
+    Runtime.objects.update_or_create(pk=f"discovery:{source.pk}", defaults={"at": now})
+    if not items:
         return
     existing = set(Source.objects.values_list("url", flat=True))
     hosts = {urlsplit(url).hostname for url in existing}
