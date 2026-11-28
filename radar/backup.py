@@ -8,6 +8,7 @@ from django.core.management.color import no_style
 from django.db import connection, transaction
 from django.utils import timezone
 
+from .catalog import CATALOG_RELEASES
 from .forms import SOURCE_FIELDS
 from .models import Event, EventReference, Observation, Preferences, Runtime, Source
 from .network import public_url
@@ -87,7 +88,8 @@ def restore_backup(document, *, replace=False):
     with connection.cursor() as cursor:
         for statement in connection.ops.sequence_reset_sql(no_style(), MODELS):
             cursor.execute(statement)
-    Runtime.objects.get_or_create(pk="seed_v1")
+    for key, _ in CATALOG_RELEASES:
+        Runtime.objects.get_or_create(pk=key)
     return len(records)
 
 

@@ -21,6 +21,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from .adapters import collect_source
 from .backup import export_backup, preferences_row, read_json, restore_backup, source_configuration
+from .catalog import SOURCE_HOME_PAGES, X_AUTHOR_PROFILES
 from .forms import ClaimForm, ObservationForm, PreferenceForm, SOURCE_FIELDS, SourceForm, TestSourceForm
 from .intelligence import DETAILS, terms
 from .models import Category, Discovery, Event, EventReference, FetchRun, LoginWindow, Observation, Runtime, Source
@@ -309,9 +310,16 @@ def sources(request):
     sources = Source.objects.order_by("-follow", "-enabled", "-weight", "name")
     q = request.GET.get("q", "").strip()[:100]
     if q:
-        sources = sources.filter(Q(name__icontains=q) | Q(platform__icontains=q) | Q(url__icontains=q))
+        matching_profiles = [url for url, handle in X_AUTHOR_PROFILES.items() if q.lstrip("@").casefold() in handle]
+        sources = sources.filter(Q(name__icontains=q) | Q(platform__icontains=q) | Q(url__icontains=q) | Q(url__in=matching_profiles))
+    results = Paginator(sources, 40).get_page(request.GET.get("page"))
+    kinds = {**dict(Source.Kind.choices), "x": "X RSS 镜像"}
+    for source in results:
+        source.home_page = SOURCE_HOME_PAGES.get(source.url, source.url)
+        source.author_handle = X_AUTHOR_PROFILES.get(source.url)
+        source.acquisition_label = kinds.get(source.detected_kind, source.get_kind_display())
     return page(request, "radar/sources.html", {
-        "title": "来源管理", "active": "sources", "sources": Paginator(sources, 40).get_page(request.GET.get("page")), "q": q,
+        "title": "来源管理", "active": "sources", "sources": results, "q": q,
         "test_form": TestSourceForm(),
         "discoveries": Discovery.objects.filter(status="ready").exclude(url__in=Source.objects.values("url")).order_by("-checked_at")[:12],
         "discovery_attempts": Discovery.objects.exclude(checked_at=None).count(),

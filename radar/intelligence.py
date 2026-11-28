@@ -11,14 +11,26 @@ from .adapters import clean, date_value
 from .catalog import OFFICIAL_DOMAINS
 from .models import Category, Event, EventReference, Source
 
-PROMO = r"free (?:tier|plan|credits?|tokens?|api|access|trial|subscription|for (?:students|developers|everyone)|months?|year|inference|usage)|student (?:discount|offer|plan|pack|benefits)|(?:credits?|discount) (?:for|to) (?:students|developers)|免费(?:额度|领取|会员|套餐|试用|调用|API|模型)|学生(?:优惠|福利|套餐)|赠金|限时免费"
+PROMO = r"free (?:tier|plan|credits?|tokens?|api|access|trial|subscription|for (?:students|developers|everyone)|months?|year|inference|usage)|promo free|trial credits|student (?:discount|offer|plan|pack|benefits)|(?:credits?|discount) (?:for|to) (?:students|developers)|免费(?:额度|领取|会员|套餐|试用|调用|API|模型)|学生(?:优惠|福利|套餐)|赠金|限时免费"
 CLOUD = r"\b(?:VPS|VM instances?|cloud compute|object storage|e2-micro|ampere a1|cloud hosting|serverless|database|postgres(?:ql)?|cloudflare|oracle cloud)\b|云服务器|免费云|对象存储|免费数据库"
 FREE = r"\b(?:free|trial|no cost|always free)\b|免费|赠金|试用"
-MODELS = r"\b(?:GPT(?:-[\w.]+)?|Claude|Gemini|DeepSeek|Qwen|GLM(?:-[\w.]+)?|Grok|LLM|model|model weights|ChatGPT|gpt-oss)\b|大模型|模型|上下文|推理"
+MODELS = r"\b(?:GPT(?:-[\w.]+)?|Claude|Gemini|DeepSeek|Qwen|GLM(?:-[\w.]+)?|Grok|LLMs?|models?|model weights|ChatGPT|gpt-oss)\b|大模型|模型|上下文|推理"
 CHANGES = r"\b(?:introduc\w*|launch\w*|releas\w*|updat\w*|new|deprecat\w*|upgrad\w*|availab\w*|API|pricing|context|token|weights|open source|open weight)\b|发布|新增|价格|开源|上线|更新"
 EVAL = r"\b(?:benchmark|arena score|swe-bench|eval(?:uation)?s?|tokens per second|latency|hands-on|tested)\b|基准|实测|评测"
 TOOLS = r"\b(?:Codex|OpenCode|Cursor|Copilot|Claude Code|Gemini CLI|agent harness|coding agent)\b|编程工具"
 SPAM = r"sponsored post|affiliate roundup|buy followers|free followers|join our telegram|限时返利|推广返佣|点击下方广告"
+FORUM_HOSTS = {"linux.do", "v2ex.com", "52pojie.cn"}
+FORUM_ORIGIN = r"发布|开源|做了|写了|上线|自研|原创|公测|内测|更新|实测|评测|对比|复盘|体验|分享|release|benchmark|hands-on"
+FORUM_SPAM = (r"代充|代开|代购|账号买卖|返佣|返利|推广链接|邀请码|接码|抽奖|抽码|合租|拼车|群引流|"
+              r"免激活|破解(?:版|补丁)|激活(?:码|工具)|注册机|绿化(?:版|工具)|永久授权|共享(?:账号|密钥)|泄露(?:密钥|凭证)")
+AI_TOPIC = (r"(?<![a-z0-9])(?:ai|llms?|gpt(?:-[a-z0-9.]+)?|claude|gemini|deepseek|qwen|glm(?:-[a-z0-9.]+)?|grok|"
+            r"chatgpt|openai|openrouter|kimi|codex|opencode|cursor|copilot|ollama|open webui)(?![a-z0-9])|"
+            r"大模型|通义千问|智谱|豆包|智谱清言|文生图|语言模型|人工智能")
+FORUM_PROMO = r"免费|限免|薅羊毛|赠金|赠送|送(?:的)?\s*(?:额度|会员|积分|\d+\s*(?:刀|美元|元))|学生(?:认证|版|优惠|权益|福利)|试用额度|优惠|折扣|黑五"
+FORUM_CLOUD = r"云服务器|云主机|免费云|云计算|对象存储|免费数据库|(?<![a-z0-9])(?:vps|serverless|cloudflare|oracle cloud)(?![a-z0-9])"
+FORUM_FREE = r"免费|限免|赠金|赠送|送(?:额度|服务器)|0元|零元|\bfree(?: tier| plan| credits?)?\b"
+FORUM_TOOL = r"工具|客户端|插件|命令行|桌面端|工作流|开源项目|代码助手|模型网关|浏览器扩展|软件|助手|[目项]录"
+FORUM_INFRA_TOOL = r"\bSSH\b|\bKubernetes\b|\bK8s\b|服务器运维"
 STOP = {"the", "and", "with", "for", "from", "new", "now", "is", "of", "to", "a", "in", "our", "on"}
 VERSION = re.compile(r"\b\d+(?:\.\d+)+(?:[-.][a-z0-9]+)*\b", re.I)
 
@@ -79,9 +91,47 @@ def infer_platform(title):
         (r"\bcloudflare\b", "Cloudflare"), (r"\b(?:github copilot|github student)\b", "GitHub"),
         (r"\boracle cloud\b", "Oracle Cloud"), (r"\bgoogle cloud\b", "Google Cloud"),
     ]:
-        if re.search(pattern, title, re.I):
+        if re.search(pattern, title, re.I | re.ASCII):
             return platform
     return ""
+
+
+def classify_forum(source, item, title, summary):
+    host = (urlsplit(item.url).hostname or "").removeprefix("www.")
+    feed_host = (urlsplit(source.url).hostname or "").removeprefix("www.")
+    if host != feed_host:
+        return None
+    if item.snapshot or re.search(FORUM_SPAM, title, re.I):
+        return None
+    if re.search(r"(?:^|[【\[])\s*(?:求|请问|交易|推广|求助|收购|出号)|^出\s*\d", title):
+        return None
+    if re.search(r"拿来干什么|(?:有人|有没有人).{0,20}(?:吗|[？?])$", title):
+        return None
+    if host == "52pojie.cn" and re.search(
+        r"破解|反编译|去广告|脱壳|逆向|免登录|无限试用|扫描漏洞", title, re.I
+    ):
+        return None
+    nearby = f"{title} {summary[:550]}"
+    if re.search(FORUM_CLOUD, title, re.I) and re.search(FORUM_FREE, nearby, re.I):
+        return Category.CLOUD
+    title_tool = bool(re.search(FORUM_TOOL, title, re.I) or re.search(TOOLS, title, re.I | re.ASCII))
+    original = bool(re.search(FORUM_ORIGIN, title, re.I))
+    if not re.search(AI_TOPIC, title, re.I):
+        if host == "52pojie.cn" and title_tool and original and re.search(FORUM_INFRA_TOOL, title, re.I | re.ASCII):
+            return Category.TOOL
+        return None
+    if original and title_tool and re.search(r"开源|自研|做了|写了|原创", title, re.I):
+        return Category.TOOL
+    if re.search(PROMO + "|" + FORUM_PROMO, title, re.I):
+        return Category.OFFER
+    if re.search(EVAL + r"|体验|对比|复盘", title, re.I):
+        return Category.EVALUATION
+    if original:
+        if title_tool:
+            return Category.TOOL
+        if re.search(MODELS, title, re.I | re.ASCII):
+            return Category.MODEL
+    return None
 
 
 def classify(source, item):
@@ -92,11 +142,21 @@ def classify(source, item):
         return None, 0
     if re.search(SPAM, text, re.I):
         return None, 0
+    if source.kind == Source.Kind.GITHUB and re.search(r"(?:^|[-.])(?:alpha|beta|rc|nightly|canary|preview)(?:[.-]|\d|$)", title, re.I):
+        return None, 0
+    if (urlsplit(source.url).hostname or "").removeprefix("www.") in FORUM_HOSTS:
+        category = classify_forum(source, item, title, item.summary)
+        if category is None:
+            return None, 0
+        bonus = {Category.OFFER: 18, Category.CLOUD: 13, Category.EVALUATION: 5}
+        return category, min(100, source.weight + bonus.get(category, 3) + min(14, len(hits) * 3))
     title_promo = bool(re.search(PROMO, title, re.I))
     promo = bool(re.search(PROMO, text, re.I))
     cloud = bool(re.search(CLOUD, text, re.I) and re.search(FREE, text, re.I))
-    model = bool(re.search(MODELS, title, re.I))
-    if source.category in {Category.OFFER, Category.CLOUD} and (item.snapshot or promo or cloud):
+    model = bool(re.search(MODELS, title, re.I | re.ASCII))
+    if source.kind == Source.Kind.GITHUB and source.category == Category.TOOL:
+        category = Category.TOOL
+    elif source.category in {Category.OFFER, Category.CLOUD} and (item.snapshot or promo or cloud):
         category = source.category
     elif cloud and (re.search(CLOUD, title, re.I) or source.platform in {"Cloudflare", "Altare"}):
         category = Category.CLOUD
@@ -113,8 +173,6 @@ def classify(source, item):
     score = (20 if category == Category.OFFER else 13 if category == Category.CLOUD else 3)
     score += (10 if source.trust == Source.Trust.OFFICIAL else 4 if source.trust == Source.Trust.INDEPENDENT else 0)
     score += min(14, len(hits) * 3)
-    if source.kind == Source.Kind.GITHUB and re.search(r"(?:^|[-.])(?:alpha|beta|rc|nightly|canary)[.-]?", title, re.I):
-        return None, 0
     return category, min(100, source.weight + score)
 
 

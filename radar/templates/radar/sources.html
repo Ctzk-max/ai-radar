@@ -2,10 +2,14 @@
 {% block content %}
 <header class="page-head"><div><h1>来源管理</h1><p>订阅公开来源，按主题调整频率和优先级。</p></div><a class="button primary" href="{% url 'source-new' %}">添加来源</a></header>
 <div class="tools-row">
-  <form method="get" class="inline"><label class="sr-only" for="source-query">搜索来源</label><input id="source-query" name="q" value="{{ q }}" placeholder="搜索名称、平台或链接" type="search"><button class="button" type="submit">搜索</button></form>
+  <form method="get" class="inline"><label class="sr-only" for="source-query">搜索来源</label><input id="source-query" name="q" value="{{ q }}" placeholder="搜索来源名称、链接或 @账号" type="search"><button class="button" type="submit">搜索</button></form>
   <a class="button" href="{% url 'status' %}">查看采集状态</a>
   <a class="button" href="{% url 'export' 'sources' %}">导出来源</a>
 </div>
+<details class="panel compact">
+  <summary>如何关注 X 账号</summary>
+  <p>作者公开订阅收录博客或通讯的公开文章。采集 X 原帖需添加账号主页和获授权的公开 RSS 镜像。</p>
+</details>
 <div class="two-col source-controls">
   <details class="panel compact"><summary>测试链接</summary>
     <form class="field-stack" action="{% url 'source-test' %}" method="post">{% csrf_token %}{{ test_form.as_div }}<button type="submit" class="button">测试抓取</button></form>
@@ -34,15 +38,17 @@
     <div class="source-info">
       <div class="event-meta">
         {% if not source.enabled %}<span class="tag muted">已暂停</span>
-        {% elif 'RSS 镜像' in source.error %}<span class="tag warning">不支持</span>
+        {% elif '缺少获授权的 X RSS 镜像' in source.error %}<span class="tag warning">不支持</span>
         {% elif source.streak %}<span class="tag error">采集异常</span>
         {% elif source.last_success %}<span class="tag success">正常</span>
         {% else %}<span class="tag muted">待检查</span>{% endif %}
-        <span>{{ source.detected_kind|default:source.get_kind_display }}</span><span>{{ source.get_trust_display }}</span>
+        <span>{{ source.acquisition_label }}</span><span>{{ source.get_trust_display }}</span>
+        {% if source.author_handle %}<span class="tag info">作者公开订阅</span>{% endif %}
         {% if source.follow %}<span class="tag info">重点关注</span>{% endif %}
       </div>
-      <h2><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.name }}</a></h2>
+      <h2><a href="{{ source.home_page }}" target="_blank" rel="noopener noreferrer">{{ source.name }}</a></h2>
       <p class="break">{{ source.url }}</p>
+      {% if source.author_handle %}<p><a href="https://x.com/{{ source.author_handle }}" target="_blank" rel="noopener noreferrer">X 主页 @{{ source.author_handle }}</a></p>{% endif %}
       <p>优先级 {{ source.weight }} · 每 {{ source.interval }} 分钟 · 最近成功 {{ source.last_success|date:"m-d H:i"|default:"暂无" }}</p>
       {% if source.error %}<p class="error-text">{{ source.error }}</p>{% endif %}
     </div>

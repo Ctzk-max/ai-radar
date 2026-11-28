@@ -1,9 +1,9 @@
 from .models import Category as C, Source as S
 
 
-def entry(name, url, kind, trust, category="", platform="", weight=65, interval=180, keywords="", selector="", page_title="", enabled=True):
+def entry(name, url, kind, trust, category="", platform="", weight=65, interval=180, keywords="", selector="", page_title="", enabled=True, error=""):
     return dict(name=name, url=url, kind=kind, trust=trust, category=category, platform=platform,
-                weight=weight, interval=interval, keywords=keywords, selector=selector, page_title=page_title, enabled=enabled)
+                weight=weight, interval=interval, keywords=keywords, selector=selector, page_title=page_title, enabled=enabled, error=error)
 
 
 O, I, U = S.Trust.OFFICIAL, S.Trust.INDEPENDENT, S.Trust.COMMUNITY
@@ -43,6 +43,38 @@ SOURCES = [
     entry("AI Free · 条款变更", "https://aifree.dev/changes?hub=student-ai-deals", W, U, C.OFFER, "", 58, 360, "student,credits,free", "main", "AI Free · 学生优惠线索"),
 ]
 
+COMMUNITY_SOURCES = [
+    entry("LINUX DO · 福利羊毛", "https://linux.do/c/welfare/36.rss", R, U, weight=58, interval=360,
+          enabled=False, error="公开 RSS 测试返回 HTTP 403，可打开论坛版块查看。"),
+    entry("LINUX DO · 科技资讯", "https://linux.do/c/news/34.rss", R, U, weight=52, interval=360,
+          enabled=False, error="公开 RSS 测试返回 HTTP 403，可打开论坛版块查看。"),
+    entry("吾爱破解 · 原创发布", "https://www.52pojie.cn/forum.php?mod=rss&fid=2", R, U, weight=54, interval=90),
+    entry("V2EX · 分享创造", "https://www.v2ex.com/feed/create.xml", R, U, weight=57, interval=75),
+    entry("V2EX · Google", "https://www.v2ex.com/feed/google.xml", R, U, weight=55, interval=90),
+    entry("Free Inference · 试用与限免", "https://freeinference.dev/feed.xml", R, U, weight=52, interval=180,
+          keywords="promo free,trial credits"),
+    entry("Ollama Releases", "https://github.com/ollama/ollama", G, O, C.TOOL, "Ollama", 68, 120),
+    entry("Open WebUI Releases", "https://github.com/open-webui/open-webui", G, O, C.TOOL, "Open WebUI", 66, 120),
+    entry("OpenHands Releases", "https://github.com/OpenHands/OpenHands", G, O, C.TOOL, "OpenHands", 66, 180),
+    entry("Qwen Code Releases", "https://github.com/QwenLM/qwen-code", G, O, C.TOOL, "Qwen", 66, 120),
+    entry("Interconnects AI · Nathan Lambert", "https://www.interconnects.ai/feed", R, U, weight=57, interval=360,
+          keywords="model,open weights,open-source,benchmark,eval,inference"),
+]
+
+X_AUTHOR_PROFILES = {
+    "https://simonwillison.net/atom/everything/": "simonw",
+    "https://www.latent.space/feed": "latentspacepod",
+    "https://www.interconnects.ai/feed": "natolambert",
+}
+SOURCE_HOME_PAGES = {
+    "https://linux.do/c/welfare/36.rss": "https://linux.do/c/welfare/36",
+    "https://linux.do/c/news/34.rss": "https://linux.do/c/news/34",
+    "https://www.52pojie.cn/forum.php?mod=rss&fid=2": "https://www.52pojie.cn/forum-2-1.html",
+    "https://www.v2ex.com/feed/create.xml": "https://www.v2ex.com/go/create",
+    "https://www.v2ex.com/feed/google.xml": "https://www.v2ex.com/go/google",
+}
+CATALOG_RELEASES = (("seed_v1", SOURCES), ("seed_v2_community", COMMUNITY_SOURCES))
+
 OFFICIAL_DOMAINS = {
     "OpenAI": ("openai.com", "github.com/openai/"),
     "Anthropic": ("anthropic.com", "claude.com", "github.com/anthropics/"),
@@ -52,6 +84,9 @@ OFFICIAL_DOMAINS = {
     "Z.ai": ("z.ai",),
     "xAI": ("x.ai",),
     "OpenCode": ("opencode.ai", "github.com/anomalyco/", "github.com/sst/"),
+    "Ollama": ("ollama.com", "github.com/ollama/ollama/"),
+    "Open WebUI": ("openwebui.com", "github.com/open-webui/open-webui/"),
+    "OpenHands": ("openhands.dev", "github.com/OpenHands/OpenHands/"),
     "Hugging Face": ("huggingface.co",),
     "GitHub": ("github.com/github/", "github.blog", "education.github.com"),
     "Cursor": ("cursor.com",),

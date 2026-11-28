@@ -1,7 +1,9 @@
 import json
 from datetime import date, timedelta
+from io import StringIO
 from unittest.mock import patch
 
+from django.core.management import call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
 from django.test import Client, SimpleTestCase, TestCase, override_settings
@@ -13,8 +15,8 @@ from .benchmarks import extract_swe
 from .collector import claim_source, collect_one
 from .discovery import assess_candidates, enqueue_candidates
 from .ingress import protect_ingress
-from .intelligence import canonical, ingest
-from .models import Category, Discovery, Event, EventReference, FetchRun, Observation, Preferences, Source
+from .intelligence import canonical, classify, ingest
+from .models import Category, Discovery, Event, EventReference, FetchRun, Observation, Preferences, Runtime, Source
 from .network import FetchError, Response, public_url, resolve_public
 from .security import auth_version
 from .specifications import claude_rows, deepseek_rows
@@ -50,12 +52,36 @@ class NetworkTests(SimpleTestCase):
         self.assertEqual(parse_feed(Response(url, 200, {}, rss))[0].summary, "body")
         with self.assertRaises(FetchError):
             parse_feed(Response(url, 200, {}, b'<!DOCTYPE rss SYSTEM "file:///private"><rss/>'))
+        with self.assertRaisesMessage(FetchError, "返回内容无法识别"):
+            parse_feed(Response(url, 200, {}, b"<html><body>No feed</body></html>"))
 
     def test_unsupported_x_does_not_fetch(self):
         with patch("radar.adapters.safe_get") as fetch, self.assertRaises(FetchError) as raised:
             collect_source(Source(name="account", url="https://x.com/example"))
         self.assertEqual(raised.exception.status, "unsupported")
         fetch.assert_not_called()
+
+    def test_x_bridge_retains_only_original_links_for_the_requested_account(self):
+        source = Source(name="watch", url="https://x.com/Example", bridge_url="https://archive.example.org/rss",
+                        detected_kind="rss", fetch_url="https://old.example.org/feed")
+        response = Response(source.bridge_url, 200, {}, b"""<rss version="2.0"><channel><title>watch</title>
+            <item><title>original</title><link>https://twitter.com/EXAMPLE/status/123?s=20</link></item>
+            <item><title>other account</title><link>https://x.com/another/status/123</link></item>
+            <item><title>unrelated</title><link>https://archive.example.org/status/123</link></item>
+        </channel></rss>""")
+        with patch("radar.adapters.safe_get", return_value=response) as fetch:
+            batch = collect_source(source)
+            fetch.assert_called_once_with(source.bridge_url, conditional={})
+        self.assertEqual(batch.kind, Source.Kind.X)
+        self.assertEqual([item.url for item in batch.items], ["https://x.com/example/status/123"])
+        response = Response(response.url, 200, {}, response.body.replace(b"EXAMPLE/status/", b"other/status/"))
+        with patch("radar.adapters.safe_get", return_value=response), self.assertRaisesMessage(FetchError, "该账号的原帖链接"):
+            collect_source(source)
+
+    def test_github_release_categorization_ignores_preview_tags(self):
+        source = Source(url="https://github.com/QwenLM/qwen-code", kind=Source.Kind.GITHUB, category=Category.TOOL)
+        self.assertEqual(classify(source, Item("Qwen Code Desktop v0.29.0", source.url, "New model support"))[0], Category.TOOL)
+        self.assertIsNone(classify(source, Item("Release v0.29.0-preview.0", source.url))[0])
 
     def test_canonical_removes_tracking_but_preserves_distinct_releases(self):
         self.assertEqual(canonical("https://example.org/path/?utm_source=test&release=new#section"),
@@ -176,6 +202,46 @@ class CollectionTests(TestCase):
         self.assertFalse(event.first_party)
         self.assertEqual(event.eligibility()[0], "尚未核实")
 
+    def test_forum_items_prefer_original_relevant_posts_and_preserve_unverified_status(self):
+        forum = Source.objects.create(name="V2EX", url="https://www.v2ex.com/feed/create.xml", kind=Source.Kind.RSS)
+        cases = [
+            ("Gemini学生优惠申请实测", Category.OFFER),
+            ("开源了一款免费的大模型翻译工具", Category.TOOL),
+            ("Claude实测对比", Category.EVALUATION),
+            ("有永久免费云服务器可以申请", Category.CLOUD),
+            ("求Gemini学生版代开", None),
+            ("Grok黑五优惠，点击推广链接", None),
+            ("我做了一个免费的数独游戏", None),
+        ]
+        for i, (title, expected) in enumerate(cases):
+            with self.subTest(title=title):
+                item = Item(title, f"https://v2ex.com/t/{i}", "我用了 AI 查语法。详情见官方文档。")
+                self.assertEqual(classify(forum, item)[0], expected)
+                ingest(forum, [item])
+        self.assertEqual(Event.objects.count(), 4)
+        event = Event.objects.get(title=cases[0][0])
+        self.assertEqual(event.eligibility()[0], "尚未核实")
+        self.assertEqual(event.references.get().trust, Source.Trust.COMMUNITY)
+
+        forum.url = "https://www.52pojie.cn/forum.php?mod=rss&fid=2"
+        url = "https://www.52pojie.cn/thread-123-1-1.html"
+        self.assertIsNone(classify(forum, Item("开源一款 AI 免激活工具", url))[0])
+        self.assertEqual(classify(forum, Item("开源一款 SSH 运维客户端", url))[0], Category.TOOL)
+        self.assertIsNone(classify(forum, Item("Gemini免费领取", "https://example.org/false-source"))[0])
+
+    def test_catalog_upgrade_keeps_existing_preferences_and_does_not_recreate_deletions(self):
+        Runtime.objects.create(key="seed_v1")
+        custom = Source.objects.create(name="自定义吾爱 RSS", url="https://www.52pojie.cn/forum.php?mod=rss&fid=2",
+                                       enabled=False, interval=123, weight=72)
+        call_command("seed_sources", stdout=StringIO())
+        custom.refresh_from_db()
+        self.assertEqual((custom.name, custom.enabled, custom.interval, custom.weight), ("自定义吾爱 RSS", False, 123, 72))
+        self.assertTrue(Source.objects.filter(name="Ollama Releases").exists())
+        self.assertFalse(Source.objects.filter(name="OpenAI News").exists())
+        Source.objects.filter(name="Ollama Releases").delete()
+        call_command("seed_sources", stdout=StringIO())
+        self.assertFalse(Source.objects.filter(name="Ollama Releases").exists())
+
     def test_retry_and_recovery_and_auditable_counts(self):
         with patch("radar.collector.collect_source", side_effect=FetchError("HTTP 429", retry_seconds=5000)):
             self.assertEqual(collect_one(self.source.pk, manual=True).status, "error")
@@ -208,6 +274,16 @@ class WebTests(TestCase):
     def event(self, title="Provider free credits", **values):
         return Event.objects.create(title=title, normalized=title.casefold(), category=Category.OFFER,
                                     platform="Example", canonical_url="https://example.org/offer", **values)
+
+    def test_source_directory_displays_author_subscription_and_manual_forum_link(self):
+        call_command("seed_sources", stdout=StringIO())
+        self.login()
+        author = self.client.get("/sources/", {"q": "@simonw"})
+        self.assertContains(author, "作者公开订阅")
+        self.assertContains(author, "https://x.com/simonw")
+        linux = self.client.get("/sources/", {"q": "LINUX DO"})
+        self.assertContains(linux, 'href="https://linux.do/c/welfare/36"')
+        self.assertContains(linux, "公开 RSS 测试返回 HTTP 403")
 
     def test_private_routes_and_login_csrf_session_and_logout(self):
         client = Client(enforce_csrf_checks=True)

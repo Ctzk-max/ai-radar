@@ -11,6 +11,8 @@ from bs4 import BeautifulSoup
 from .models import Source
 from .network import FetchError, public_url, safe_get
 
+X_HOSTS = {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}
+
 
 @dataclass
 class Item:
@@ -69,7 +71,7 @@ def parse_feed(response):
         "content-type": response.headers.get("content-type", "application/xml"),
         "content-location": response.url,
     })
-    if not document.version:
+    if not document.get("version"):
         raise FetchError("返回内容无法识别为 RSS 或 Atom")
     entries = []
     for e in document.entries[:65]:
@@ -92,13 +94,13 @@ def detect(source):
     parts = urlsplit(source.url)
     host = parts.hostname
     path = parts.path.strip("/").split("/")
-    if host in {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}:
+    if host in X_HOSTS:
         if len(path) != 1 or not re.fullmatch(r"[A-Za-z0-9_]{1,15}", path[0]) or path[0].lower() in {
             "home", "explore", "search", "settings", "messages", "notifications", "i", "intent",
         }:
             raise FetchError("请输入 X 公开账号主页", "unsupported")
         if not source.bridge_url:
-            raise FetchError("此 X 账号没有可用且获授权的 RSS 镜像。可改订阅作者的公开博客。", "unsupported")
+            raise FetchError("缺少获授权的 X RSS 镜像。若作者另有公开订阅，可添加其 RSS 或 Atom。", "unsupported")
         return Source.Kind.X, source.bridge_url
     if source.kind == Source.Kind.X:
         raise FetchError("仅支持登记 X 公开账号主页", "unsupported")
@@ -112,6 +114,20 @@ def detect(source):
     if source.kind == Source.Kind.RSS or parts.path.endswith((".rss", ".atom", ".xml")):
         return Source.Kind.RSS, source.url
     return source.kind, source.url
+
+
+def x_posts(source, items):
+    handle = urlsplit(source.url).path.strip("/").lower()
+    posts = []
+    for item in items:
+        original = urlsplit(item.url)
+        match = re.fullmatch(r"/([a-zA-Z0-9_]{1,15})/status/([0-9]{1,25})/?", original.path)
+        if original.scheme == "https" and original.hostname in X_HOSTS and match and match[1].lower() == handle:
+            item.url = f"https://x.com/{handle}/status/{match[2]}"
+            posts.append(item)
+    if items and not posts:
+        raise FetchError("X RSS 镜像未提供该账号的原帖链接。")
+    return posts
 
 
 def extract_web(response, source):
@@ -201,7 +217,7 @@ def extract_web(response, source):
 
 def collect_source(source):
     kind, target = detect(source)
-    if source.fetch_url and source.detected_kind == Source.Kind.RSS and source.kind == Source.Kind.AUTO:
+    if source.fetch_url and source.detected_kind == Source.Kind.RSS and kind == Source.Kind.AUTO:
         kind, target = Source.Kind.RSS, source.fetch_url
     conditional = {}
     if source.fetch_url == target:
@@ -235,7 +251,10 @@ def collect_source(source):
                               date_value(row.get("createdAt"))))
         batch = Batch(Source.Kind.WEB, response.url, items)
     elif must_feed or looks_feed or "rss+xml" in content_type or "atom+xml" in content_type:
-        batch = Batch(kind if must_feed else Source.Kind.RSS, response.url, parse_feed(response))
+        items = parse_feed(response)
+        if kind == Source.Kind.X:
+            items = x_posts(source, items)
+        batch = Batch(kind if must_feed else Source.Kind.RSS, response.url, items)
     else:
         batch = extract_web(response, source)
     if batch.url == response.url:
