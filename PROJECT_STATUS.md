@@ -15,4 +15,4 @@
 恢复工作时检查 `git status --short --branch`、`git log -8 --oneline`、线上 `/health/` 与 [TASKS.md](TASKS.md)。证据及限制见 [TEST_REPORT.md](TEST_REPORT.md)。
 # 2026-11-28 社区来源增量
 
-本地已实现 9 项启用的增量来源及两个暂停的 LINUX DO 版块入口。来源管理可搜索已关联的 X 账号并查看作者公开订阅。28 项测试通过，等候生产部署与实际采集核对。
+9 项启用的增量来源及两个暂停的 LINUX DO 版块入口已上线。生产首轮采集 9 项全部成功，生产来源测试确认两个 LINUX DO RSS 均返回 HTTP 403。来源管理可搜索已关联的 X 账号并查看作者公开订阅。X 原帖仍需要获授权的 RSS 镜像。

@@ -210,6 +210,7 @@ class CollectionTests(TestCase):
             ("Claude实测对比", Category.EVALUATION),
             ("有永久免费云服务器可以申请", Category.CLOUD),
             ("求Gemini学生版代开", None),
+            ("有没有 Gemini 新会员黑五的消息，还没开放吗", None),
             ("Grok黑五优惠，点击推广链接", None),
             ("我做了一个免费的数独游戏", None),
         ]

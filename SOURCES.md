@@ -55,6 +55,8 @@
 
 论坛先验证帖子来自对应站点，再从标题识别真正相关的主题。分享创造只从正文提及 AI 的普通工具不会进入信息流。返利、代充、拼车、破解或激活、常见求助等低价值内容按规则排除。社区福利标记为尚未核实。LINUX DO 的 Telegram 网页预览不允许该抓取器访问，NodeSeek 的 RSS 本地访问未通过，LowEndTalk 的候选 RSS 路径受 robots 限制。
 
+2026-11-28 21:39–21:40（北京时间），生产调度器完成上述 9 个启用增量的首轮采集，共解析 195 条，分类及去重后新增 52 条历史和近期记录。通过生产来源测试分别访问 LINUX DO 两个公开 RSS，均收到 HTTP 403。
+
 ## 评测和 X
 
 - SWE-bench Verified Bash Only 从维护方 JSON 导入，保存日期、试验来源与 harness 版本。Claude 和 DeepSeek API 指标来自厂商文档。[SWE-bench 数据](https://github.com/SWE-bench/swe-bench.github.io/blob/master/data/leaderboards.json) · [Claude 指标](https://platform.claude.com/docs/en/models/overview) · [DeepSeek 指标](https://api-docs.deepseek.com/quick_start/pricing/)

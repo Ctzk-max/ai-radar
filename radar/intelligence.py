@@ -103,9 +103,9 @@ def classify_forum(source, item, title, summary):
         return None
     if item.snapshot or re.search(FORUM_SPAM, title, re.I):
         return None
-    if re.search(r"(?:^|[【\[])\s*(?:求|请问|交易|推广|求助|收购|出号)|^出\s*\d", title):
+    if re.search(r"(?:^|[【\[])\s*(?:求|请问|有没有|交易|推广|收购|出号)|^出\s*\d", title):
         return None
-    if re.search(r"拿来干什么|(?:有人|有没有人).{0,20}(?:吗|[？?])$", title):
+    if re.search(r"拿来干什么|(?:有人|还没开放|什么时候开).{0,20}(?:吗|[？?])$", title):
         return None
     if host == "52pojie.cn" and re.search(
         r"破解|反编译|去广告|脱壳|逆向|免登录|无限试用|扫描漏洞", title, re.I
