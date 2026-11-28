@@ -2,6 +2,8 @@
 
 私人 AI 情报站。自动关注 AI 福利、模型动态和免费云资源。首页默认显示最近三天，可搜索、收藏、追踪领取并管理公开信息源。
 
+[打开正式站点](https://ai-radar.go.altare.global) · [当前状态](PROJECT_STATUS.md)
+
 ## 本地运行
 
 Python 3.13 为正式部署版本。Windows 本地也可用 Python 3.11。
